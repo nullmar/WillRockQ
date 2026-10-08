@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Will Rock — просмотрщик .lg / .tpl</title>
+<style>
+:root{--bg:#14161a;--panel:#1b1e24;--line:#2c3039;--tx:#d9d6cc;--dim:#8a8d94;--ac:#d4a24c;--sel:#3a3322}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--tx);font:13px/1.4 system-ui,Segoe UI,sans-serif}
+#app{display:flex;height:100%}
+aside{width:310px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+aside h1{font-size:14px;margin:0;padding:12px 12px 2px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#info{padding:0 12px 8px;color:var(--dim);font-size:12px}
+.row{display:flex;gap:6px;padding:0 12px 8px;flex-wrap:wrap;align-items:center}
+button,input[type=search],select{font:inherit;color:var(--tx);background:#232730;border:1px solid var(--line);border-radius:4px;padding:5px 8px}
+button{cursor:pointer}button:hover,button:focus-visible,select:focus-visible{border-color:var(--ac);outline:none}
+button:disabled{opacity:.5;cursor:default}
+input[type=search]{flex:1;min-width:0}
+.chk{display:flex;gap:5px;align-items:center;font-size:12px;color:var(--dim)}
+#tabs{display:flex;border-top:1px solid var(--line)}
+#tabs button{flex:1;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:7px 4px;color:var(--dim)}
+#tabs button.on{color:var(--tx);border-bottom-color:var(--ac)}
+#list{flex:1;overflow:auto;border-top:1px solid var(--line);padding:2px 0}
+.it{display:flex;gap:7px;align-items:center;padding:3px 10px;font-size:12px;cursor:pointer;border-left:3px solid transparent}
+.it:hover{background:#232730}.it.sel{background:var(--sel);border-left-color:var(--ac)}
+.it .chip{width:9px;height:9px;border-radius:2px;flex:none}
+.it span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.it i{font-style:normal;color:var(--dim);flex:none}
+.it canvas{width:28px;height:28px;flex:none;border-radius:3px;background:#222}
+.gh{padding:6px 10px 2px;font-size:11px;color:var(--dim);text-transform:none;display:flex;gap:6px;align-items:center}
+main{flex:1;position:relative;min-width:0;outline:0}
+canvas#cv{width:100%;height:100%;display:block}
+#drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--dim);pointer-events:none}
+#drop b{display:block;color:var(--tx);font-size:18px;margin-bottom:6px}
+main.over{box-shadow:inset 0 0 0 2px var(--ac)}
+#help{position:absolute;left:12px;bottom:10px;right:12px;color:var(--dim);font-size:11px;pointer-events:none;text-shadow:0 1px 2px #000}
+#det{position:absolute;top:10px;right:10px;width:290px;max-height:calc(100% - 50px);overflow:auto;background:rgba(27,30,36,.94);border:1px solid var(--line);border-radius:6px;padding:10px;display:none}
+#det .dh{font-weight:600;margin:0 0 4px;display:flex;gap:6px;align-items:center;word-break:break-all}
+#det .dm{color:var(--dim);font-size:12px;margin-bottom:6px}
+#det pre{margin:6px 0;white-space:pre-wrap;font:11px/1.35 ui-monospace,Consolas,monospace;color:#bfb99f}
+#det .res{display:flex;gap:8px;margin:5px 0;align-items:center}
+#det .res canvas{width:44px;height:44px;border-radius:3px;background:#222;flex:none}
+#det .res b{font-weight:500;word-break:break-all}#det .res small{display:block;color:var(--dim);font-size:11px;word-break:break-all}
+@media(max-width:700px){#app{flex-direction:column}aside{width:100%;height:46%;border-right:0}#det{width:calc(100% - 20px)}}
+</style></head><body>
+<div id="app">
+<aside>
+<h1 id="fname">Файл не выбран</h1>
+<div id="info">Перетащите .lg или .tpl в окно справа.</div>
+<div class="row"><button id="open">Открыть…</button><button id="tex" title="Выберите папку игры целиком или только TEXTURES">Папка игры…</button><button id="obj" disabled>OBJ</button></div>
+<div class="row"><label class="chk"><input type="checkbox" id="texon" checked> текстуры</label><label class="chk"><input type="checkbox" id="lmon" checked> лайтмапы</label><label class="chk"><input type="checkbox" id="zoneon"> зоны</label><label class="chk"><input type="checkbox" id="entson" checked> сущности</label></div>
+<div id="tabs"><button data-t="n" class="on">Узлы</button><button data-t="e">Сущности</button><button data-t="m">Материалы</button></div>
+<div class="row" style="padding-top:8px"><input id="q" type="search" placeholder="Фильтр"><select id="sort"></select></div>
+<div id="list"></div>
+</aside>
+<main id="main" tabindex="0"><canvas id="cv"></canvas>
+<div id="drop"><div><b>Перетащите файл сюда</b>.lg — уровень, .tpl — модель</div></div>
+<div id="det"></div>
+<div id="help">ЛКМ — выбрать (Shift — добавить) · СКМ или Alt+ЛКМ — вращать · Shift+СКМ — сдвиг · колесо — масштаб · ПКМ + W A S D / Q E — полёт (Shift — быстрее, колесо — скорость) · Numpad (или цифры) 1/3/7 — виды · . — к выбранному · Home — всё · H — скрыть выбранное (Alt+H — вернуть)</div></main>
+</div>
+<input id="file" type="file" accept=".lg,.tpl" hidden>
+<input id="texdir" type="file" webkitdirectory multiple hidden>
+<script>
+//PARSE-START
+
+function tile(dv,o,end){const k=[];let p=o;while(p<end){if(p+6>end)return null;const t=dv.getUint16(p,true),e=dv.getUint32(p+2,true);if(e<p+6||e>end)return null;k.push([t,p,e]);p=e}return k.length&&p===end?k:null}
+function kids(dv,s,e){return tile(dv,s+6,e)||tile(dv,s+10,e)||[]}
+function mul(a,b){const c=new Array(16).fill(0);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)c[i*4+j]+=a[i*4+k]*b[k*4+j];return c}
+const I4=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+function str(dv,a,b){let s='';for(let i=a;i<b&&dv.getUint8(i);i++)s+=String.fromCharCode(dv.getUint8(i));return s}
+function parseNode(dv,s,e,pw,out){
+ let name='',local=I4,verts=null,fv=[],ft=[],ft2=[],fm=[],uv=null,uv2=null,groups=[],sub=[];
+ const u16=o=>dv.getUint16(o,true),u32=o=>dv.getUint32(o,true);
+ for(const[t,cs,ce]of tile(dv,s+6,e)||[]){
+  if(t===0xf4)name=str(dv,cs+6,ce);
+  else if(t===0xf9&&ce-cs-6===64){local=[];for(let i=0;i<16;i++)local.push(dv.getFloat32(cs+6+i*4,true))}
+  else if(t===0xf1&&ce-cs-6>=4){const c=u32(cs+6);if(4+12*c===ce-cs-6){verts=new Float32Array(c*3);for(let i=0;i<c*3;i++)verts[i]=dv.getFloat32(cs+10+i*4,true)}}
+  else if(t===0x106||t===0xfe){let p=cs+10;while(p+6<=ce){const tg=u16(p),pe=u32(p+2);
+    if(tg===0xff&&pe-p-6===6)fv.push(u16(p+6),u16(p+8),u16(p+10));
+    else if(tg===0x100&&pe-p-6>=10){while(ft.length<fv.length-3)ft.push(0,0,0);const o=pe-p-6>=34?p+14:p+10;ft.push(u16(o),u16(o+2),u16(o+4));if(pe-p-6>=34)fm.push(u32(p+10));if(pe-p-6===16){while(ft2.length<fv.length-3)ft2.push(0,0,0);ft2.push(u16(p+16),u16(p+18),u16(p+20))}}
+    if(pe<=p)break;p=pe}}
+  else if(t===0x107){
+   for(const[t2,c2,e2]of kids(dv,cs,ce)){
+    if(t2===0xf3){for(const[t3,c3,e3]of kids(dv,c2,e2)){if(t3===0x103){const c=u32(c3+6);if(c&&4+8*c===e3-c3-6){const A=new Float32Array(c*2);for(let i=0;i<c*2;i++)A[i]=dv.getFloat32(c3+10+i*4,true);if(!uv)uv=A;else if(!uv2)uv2=A}}}}
+    else if(t2===0x104){for(const[t3,c3,e3]of kids(dv,c2,e2)){
+      if(t3===0x105&&e3-c3-6>=8)groups.push({start:u32(c3+6),count:u32(c3+10),mat:-1});
+      else if(t3===0x10b&&groups.length){const G=groups[groups.length-1];G.layers=[];for(const[t4,c4,e4]of kids(dv,c3,e3)){if(t4===0x10a)G.layers.push(u32(c4+6))}if(G.layers.length)G.mat=G.layers[0]}}}
+   }}
+  else if(t===0x101&&!uv){for(const[t3,c3,e3]of kids(dv,cs,ce)){if(t3===0x103&&!uv){const c=u32(c3+6);if(c&&4+8*c===e3-c3-6){uv=new Float32Array(c*2);for(let i=0;i<c*2;i++)uv[i]=dv.getFloat32(c3+10+i*4,true)}}}}
+  else if(t===0xf0)sub.push([cs,ce]);
+ }
+ const w=mul(local,pw),nf=fv.length/3;
+ if(verts&&nf){const n=verts.length/3,tr=new Float32Array(nf*9),tc=uv?new Float32Array(nf*6):null,tc2=uv2&&ft2.length>=nf*3?new Float32Array(nf*6):null;let ok=true;
+  for(let i=0;i<nf*3&&ok;i++){const v=fv[i];if(v>=n){ok=false;break}const x=verts[v*3],y=verts[v*3+1],z=verts[v*3+2];
+   tr[i*3]=-(x*w[0]+y*w[4]+z*w[8]+w[12]);tr[i*3+1]=x*w[1]+y*w[5]+z*w[9]+w[13];tr[i*3+2]=x*w[2]+y*w[6]+z*w[10]+w[14];
+   if(tc){const k=ft[i]||0;if(k*2+1<uv.length){tc[i*2]=uv[k*2];tc[i*2+1]=uv[k*2+1]}}if(tc2){const k=ft2[i]||0;if(k*2+1<uv2.length){tc2[i*2]=uv2[k*2];tc2[i*2+1]=uv2[k*2+1]}}}
+  if(ok){if(!groups.length&&fm.length===nf){let s0=0;for(let i=1;i<=nf;i++){if(i===nf||fm[i]!==fm[s0]){groups.push({start:s0,count:i-s0,mat:fm[s0],layers:[fm[s0]]});s0=i}}}if(!groups.length)groups=[{start:0,count:nf,mat:-1}];groups.forEach(g=>{if(!g.layers)g.layers=[]});out.push({name,tr,tc,tc2,tris:nf,groups,zone:groups.every(g=>g.mat<0||g.mat>=0x7fffffff)&&(!tc||/&dom|&h_|^poly\d|_area\b|_spawn/i.test(name))})}}
+ for(const[cs,ce]of sub)parseNode(dv,cs,ce,w,out);
+}
+function parseEnt(dv,s,e,out){
+ const b=new Uint8Array(dv.buffer),a=s+6;
+ if(!(b[a]===83&&b[a+1]===78&&b[a+2]===73&&b[a+3]===65))return;
+ let i=a+4;const S=[];for(let k=0;k<4;k++){let j=i;while(j<e&&b[j])j++;S.push(str(dv,i,j));i=j+1}
+ if(i+64>e)return;const m=[];for(let k=0;k<16;k++)m.push(dv.getFloat32(i+k*4,true));
+ let props='';const p=i+64;
+ if(p+6<=e&&dv.getUint16(p,true)===0x1ba){const pe=Math.min(e,dv.getUint32(p+2,true));for(let q=p+6;q<pe;q++)if(b[q])props+=String.fromCharCode(b[q])}
+ out.push({name:S[0],tpl:S[1],klass:S[2],cls:S[1]||S[2],pos:[-m[12],m[13],m[14]],props:props.replace(/\r/g,'').trim(),on:true});
+}
+function loadChunks(buf){
+ const dv=new DataView(buf),out=[],ents=[];let mats=[];
+ (function scan(l){for(const[t,s,e]of l||[]){if(t===0xf0)parseNode(dv,s,e,I4,out);
+   else if(t===0x155&&!mats.length){for(const[t2,c2,e2]of kids(dv,s,e))if(t2===0x156)mats.push(str(dv,c2+6,e2))}
+   else if(t===0x1b8){for(const[t2,c2,e2]of kids(dv,s,e))if(t2===0x1b9)parseEnt(dv,c2,e2,ents)}
+   else if(t===0x2e4||t===0x1ea)scan(kids(dv,s,e))}})(tile(dv,0,dv.byteLength));
+ return{nodes:out,mats,ents};
+}
+
+//PARSE-END
+
+const FIX={0xf0:4,0xf1:8,0xf2:4,0xf3:4,0xf9:4,0xfa:4,0xfb:4};
+function parsePct(buf){
+ const dv=new DataView(buf);let o=0,t={};
+ for(let i=0;i<24;i++){
+  const tag=dv.getUint16(o,true);let end=dv.getUint32(o+2,true);
+  if(tag===0xf4){const w=dv.getUint32(t[0xf1],true),h=dv.getUint32(t[0xf1]+4,true);
+   return{w,h,fmt:dv.getUint32(t[0xf2],true),mips:dv.getUint32(t[0xf9],true),base:o+6,dv,len:buf.byteLength}}
+  if(!end)end=o+6+(FIX[tag]||4);
+  t[tag]=o+6;o=end;
+ }
+ throw new Error('нет блока 0xf4');
+}
+function c565(v){return[(v>>11&31)*255/31|0,(v>>5&63)*255/63|0,(v&31)*255/31|0]}
+function dxt(p,dv5,fmt){
+ const{w,h,base,dv}=p,out=new Uint8ClampedArray(w*h*4),mips=p.mips;
+ const tbl=Math.ceil(mips*4/16)*16,start=base+(mips?dv.getUint32(base,true):tbl);
+ const bs=fmt===12?8:16;let o=start;
+ for(let by=0;by<Math.ceil(h/4);by++)for(let bx=0;bx<Math.ceil(w/4);bx++){
+  let al=null;
+  if(fmt===15){al=[];for(let i=0;i<16;i++)al.push((dv.getUint8(o+(i>>1))>>(4*(i&1))&15)*17);o+=8}
+  if(fmt===17){const a0=dv.getUint8(o),a1=dv.getUint8(o+1),A=[a0,a1];
+   if(a0>a1)for(let i=1;i<7;i++)A.push(((7-i)*a0+i*a1)/7|0);else{for(let i=1;i<5;i++)A.push(((5-i)*a0+i*a1)/5|0);A.push(0,255)}
+   let bits=0n;for(let i=0;i<6;i++)bits|=BigInt(dv.getUint8(o+2+i))<<BigInt(8*i);
+   al=[];for(let i=0;i<16;i++)al.push(A[Number(bits>>BigInt(3*i)&7n)]);o+=8}
+  const q0=dv.getUint16(o,true),q1=dv.getUint16(o+2,true),a=c565(q0),b=c565(q1),C=[a,b];
+  if(q0>q1||fmt===17||fmt===15){C.push(a.map((v,i)=>(2*v+b[i])/3|0),a.map((v,i)=>(v+2*b[i])/3|0))}
+  else{C.push(a.map((v,i)=>(v+b[i])/2|0),[0,0,0])}
+  const idx=dv.getUint32(o+4,true);
+  for(let i=0;i<16;i++){const x=bx*4+(i&3),y=by*4+(i>>2);if(x>=w||y>=h)continue;
+   const ci=idx>>2*i&3,c=C[ci],k=(y*w+x)*4;out[k]=c[0];out[k+1]=c[1];out[k+2]=c[2];
+   out[k+3]=al?al[i]:((fmt===12||fmt===13)&&q0<=q1&&ci===3?0:255)}
+  o+=8;
+ }
+ return out;
+}
+function decodePct(buf){
+ const p=parsePct(buf),{w,h,fmt,base,dv}=p;let px;
+ if(fmt===12||fmt===13||fmt===15||fmt===17)px=dxt(p,dv,fmt);
+ else if(fmt===5){px=new Uint8ClampedArray(w*h*4);for(let i=0;i<w*h;i++){const v=dv.getUint16(base+i*2,false);px[i*4]=(v>>11&31)*255/31;px[i*4+1]=(v>>5&63)*255/63;px[i*4+2]=(v&31)*255/31;px[i*4+3]=255}}
+ else if(fmt===11){px=new Uint8ClampedArray(w*h*4);for(let i=0;i<w*h;i++){px[i*4]=dv.getUint8(base+i*2);px[i*4+1]=dv.getUint8(base+i*2+1);px[i*4+2]=128;px[i*4+3]=255}}
+ else if(fmt===2){px=new Uint8ClampedArray(w*h*4);for(let i=0;i<w*h;i++){px[i*4]=dv.getUint8(base+i*3);px[i*4+1]=dv.getUint8(base+i*3+1);px[i*4+2]=dv.getUint8(base+i*3+2);px[i*4+3]=255}}
+ else if(fmt===0){px=new Uint8ClampedArray(w*h*4);for(let i=0;i<w*h;i++){const k=base+i*4;px[i*4]=dv.getUint8(k+1);px[i*4+1]=dv.getUint8(k+2);px[i*4+2]=dv.getUint8(k+3);px[i*4+3]=dv.getUint8(k)}}
+ else return{w,h,fmt,mips:p.mips,px:null};
+ return{w,h,fmt,mips:p.mips,px};
+}
+
+//PICK-START
+function rayBox(o,d,b){let t0=0,t1=1e30;for(let i=0;i<3;i++){if(Math.abs(d[i])<1e-12){if(o[i]<b[i]||o[i]>b[i+3])return false}else{let a=(b[i]-o[i])/d[i],c=(b[i+3]-o[i])/d[i];if(a>c){const x=a;a=c;c=x}t0=Math.max(t0,a);t1=Math.min(t1,c);if(t0>t1)return false}}return true}
+function rayTri(o,d,t,i){const ax=t[i],ay=t[i+1],az=t[i+2],e1x=t[i+3]-ax,e1y=t[i+4]-ay,e1z=t[i+5]-az,e2x=t[i+6]-ax,e2y=t[i+7]-ay,e2z=t[i+8]-az;
+ const px=d[1]*e2z-d[2]*e2y,py=d[2]*e2x-d[0]*e2z,pz=d[0]*e2y-d[1]*e2x,det=e1x*px+e1y*py+e1z*pz;if(Math.abs(det)<1e-12)return -1;
+ const iv=1/det,sx=o[0]-ax,sy=o[1]-ay,sz=o[2]-az,u=(sx*px+sy*py+sz*pz)*iv;if(u<0||u>1)return -1;
+ const qx=sy*e1z-sz*e1y,qy=sz*e1x-sx*e1z,qz=sx*e1y-sy*e1x,v=(d[0]*qx+d[1]*qy+d[2]*qz)*iv;if(v<0||u+v>1)return -1;
+ return(e2x*qx+e2y*qy+e2z*qz)*iv}
+function bbOf(tr){const b=[1e30,1e30,1e30,-1e30,-1e30,-1e30];for(let i=0;i<tr.length;i+=3)for(let j=0;j<3;j++){b[j]=Math.min(b[j],tr[i+j]);b[j+3]=Math.max(b[j+3],tr[i+j])}return b}
+function pickNode(o,d,list){let best=null,bt=1e30;for(const n of list){if(!rayBox(o,d,n.bb))continue;const t=n.tr;for(let i=0;i<t.length;i+=9){const h=rayTri(o,d,t,i);if(h>0&&h<bt){bt=h;best=n}}}return best?{n:best,t:bt}:null}
+function rayEnt(o,d,list,r){let best=null,bt=1e30;for(const e of list){const x=e.pos[0]-o[0],y=e.pos[1]-o[1],z=e.pos[2]-o[2],t=x*d[0]+y*d[1]+z*d[2];if(t<=0)continue;const q=x*x+y*y+z*z-t*t;if(q<r*r&&t<bt){bt=t;best=e}}return best?{e:best,t:bt}:null}
+//PICK-END
+const $=id=>document.getElementById(id),cv=$('cv'),gl=cv.getContext('webgl2',{alpha:false});
+let nodes=[],mats=[],ents=[],prog,vao,vbo,cam={yaw:.6,pitch:.5,dist:10,c:[0,0,0],r:10},fileName='model',tab='n';
+const texFiles=new Map(),mdlFiles=new Map(),texGL=new Map(),texInfo=new Map(),sel=new Set();let selEnt=null,matUse=new Map(),mdlCache=new Map();
+const hexRGB=h=>[1,3,5].map(i=>parseInt(h.substr(i,2),16)/255);
+const ZC=[[/dom_ai|_ai_|^ai/i,'враг','#e0605a'],[/snd|sound/i,'звук','#5a9ee0'],[/fog/i,'туман','#9aa3ad'],[/tpt|tele/i,'телепорт','#b070e0'],[/vis/i,'видимость','#5cc88a'],[/action/i,'действие','#e0a040'],[/kill|piziri|dmg/i,'урон','#e04070'],[/secret/i,'секрет','#d0c040'],[/clean/i,'очистка','#7ad0d0']];
+function nodeCat(o){if(o.cat)return o.cat;let c;
+ if(/^sky/i.test(o.name))c=['небо','#6aa7d9'];
+ else if(o.zone){c=['зона','#a0a0a0'];for(const z of ZC)if(z[0].test(o.name)){c=[z[1],z[2]];break}}
+ else if(/lod_?\d+$/i.test(o.name))c=['LOD','#6f7480'];else c=['объект','#c8b27a'];
+ return o.cat=[c[0],c[1],hexRGB(c[1])]}
+function entCat(e){const k=e.cls||e.name;let c;
+ if(/^item_/i.test(k))c=['предмет','#5cc88a'];else if(/^pwp_/i.test(k))c=['оружие/патроны','#e0c040'];else if(/^ai_/i.test(k))c=['враг','#e0605a'];
+ else if(/^actor/i.test(k))c=['актёр','#5a9ee0'];else if(/^sfx_/i.test(k))c=['эффект','#b070e0'];else if(/start/i.test(k))c=['старт','#ffffff'];
+ else if(!e.cls)c=['без класса','#8a8d94'];else c=['прочее','#d4a24c'];
+ return e.cat=[c[0],c[1],hexRGB(c[1])]}
+function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw gl.getShaderInfoLog(o);return o}
+function initGL(){
+ prog=gl.createProgram();
+ gl.attachShader(prog,sh(gl.VERTEX_SHADER,`#version 300 es
+in vec3 p;in vec3 c;in vec2 u;in vec2 u2;uniform mat4 mv,pr;out vec3 vp;out vec3 vc;out vec2 vu;out vec2 vu2;void main(){vec4 v=mv*vec4(p,1.);vp=v.xyz;vc=c;vu=u;vu2=u2;gl_Position=pr*v;}`));
+ gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,`#version 300 es
+precision highp float;in vec3 vp;in vec3 vc;in vec2 vu;in vec2 vu2;uniform sampler2D tx;uniform sampler2D lm;uniform float ut,mode,ua,hl,ul;out vec4 o;
+void main(){vec3 n=normalize(cross(dFdx(vp),dFdy(vp)));float l=abs(dot(n,normalize(vec3(.3,.5,.8))));
+vec4 t=vec4(vc,1.);float al=ua;if(ut>.5){t=texture(tx,vu);if(mode<.5){if(t.a<.5)discard;}else al=t.a*ua;}
+vec3 c=ul>.5?t.rgb*texture(lm,vu2).rgb*2.:t.rgb*(.4+.6*l);c=mix(c,vec3(1.,.55,.1),hl*.5);o=vec4(c,al);}`));
+ gl.linkProgram(prog);vao=gl.createVertexArray();vbo=gl.createBuffer();gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+}
+function hue(s){let h=0;for(const ch of s)h=(h*31+ch.charCodeAt(0))>>>0;const a=(h%360)/60,x=1-Math.abs(a%2-1),m=[[1,x,0],[x,1,0],[0,1,x],[0,x,1],[x,0,1],[1,0,x],[1,x,0]][Math.floor(a)];return m.map(v=>.45+.4*v)}
+function rebuild(){
+ let n=0;nodes.forEach(o=>{o.first=n;n+=o.tris*3});
+ const E=ents.length,sz=Math.max(cam.r*.012,.05),d=new Float32Array((n+E*24)*10);let k=0;
+ nodes.forEach(o=>{const c=o.zone?nodeCat(o)[2]:hue(o.name);for(let i=0;i<o.tris*3;i++){d.set(o.tr.subarray(i*3,i*3+3),k);d.set(c,k+3);if(o.tc)d.set(o.tc.subarray(i*2,i*2+2),k+6);if(o.tc2)d.set(o.tc2.subarray(i*2,i*2+2),k+8);k+=10}});
+ ents.forEach((en,ei)=>{en.first=n+ei*24;const c=entCat(en)[2],[x,y,z]=en.pos,P=[[sz,0,0],[0,0,sz],[-sz,0,0],[0,0,-sz]];
+  for(let q=0;q<4;q++){const a=P[q],b=P[(q+1)%4];for(const apex of[[0,sz*1.4,0],[0,-sz*1.4,0]]){for(const v of[a,b,apex]){d.set([x+v[0],y+v[1],z+v[2],c[0],c[1],c[2],0,0,0,0],k);k+=10}}}});
+ en_sz=sz;gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,vbo);gl.bufferData(gl.ARRAY_BUFFER,d,gl.STATIC_DRAW);
+ for(const[nm,s2,off]of[['p',3,0],['c',3,12],['u',2,24],['u2',2,32]]){const l=gl.getAttribLocation(prog,nm);gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,s2,gl.FLOAT,false,40,off)}
+}
+let en_sz=1;
+function visible(o){return o.on&&(!o.zone||$('zoneon').checked)}
+function boundsOf(list){const b=[1e30,1e30,1e30,-1e30,-1e30,-1e30];list.forEach(o=>{for(let j=0;j<3;j++){b[j]=Math.min(b[j],o.bb[j]);b[j+3]=Math.max(b[j+3],o.bb[j+3])}});return b}
+function fit(){const l=nodes.filter(o=>o.on&&!o.zone);if(!l.length)return;const b=boundsOf(l);cam.c=[0,1,2].map(i=>(b[i]+b[i+3])/2);cam.r=Math.max(b[3]-b[0],b[4]-b[1],b[5]-b[2])/2||1;cam.dist=cam.r*2.4}
+function focusSel(){const l=[...sel];let b;if(l.length)b=boundsOf(l);else if(selEnt){const p=selEnt.pos,s=en_sz*3;b=[p[0]-s,p[1]-s,p[2]-s,p[0]+s,p[1]+s,p[2]+s]}else return;
+ cam.c=[0,1,2].map(i=>(b[i]+b[i+3])/2);cam.dist=Math.max(Math.max(b[3]-b[0],b[4]-b[1],b[5]-b[2])*1.6,cam.r*.02,1)}
+function basis(){const cy=Math.cos(cam.yaw),sy=Math.sin(cam.yaw),cp=Math.cos(cam.pitch),sp=Math.sin(cam.pitch);
+ const z=[cp*sy,sp,cp*cy];let x=[z[2],0,-z[0]];const l=Math.hypot(x[0],x[2])||1;x=[x[0]/l,0,x[2]/l];
+ const y=[z[1]*x[2]-z[2]*x[1],z[2]*x[0]-z[0]*x[2],z[0]*x[1]-z[1]*x[0]];return{x,y,z,e:[0,1,2].map(i=>cam.c[i]+z[i]*cam.dist)}}
+function draw(){
+ if(!prog)return;const w=cv.clientWidth*devicePixelRatio|0,h=cv.clientHeight*devicePixelRatio|0;
+ if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h}
+ gl.viewport(0,0,w,h);gl.clearColor(.078,.086,.102,1);gl.depthMask(true);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);
+ if(!nodes.length&&!ents.length)return;
+ const B=basis(),e=B.e,d=v=>v[0]*e[0]+v[1]*e[1]+v[2]*e[2],x=B.x,y=B.y,z=B.z;
+ const mv=[x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-d(x),-d(y),-d(z),1];
+ const near=cam.r*.002,far=cam.r*60,t=1/Math.tan(.4),a=w/h;
+ const pr=[t/a,0,0,0,0,t,0,0,0,0,(far+near)/(near-far),-1,0,0,2*far*near/(near-far),0];
+ gl.useProgram(prog);gl.uniform1i(gl.getUniformLocation(prog,'tx'),0);gl.uniform1i(gl.getUniformLocation(prog,'lm'),1);gl.uniformMatrix4fv(gl.getUniformLocation(prog,'mv'),false,mv);gl.uniformMatrix4fv(gl.getUniformLocation(prog,'pr'),false,pr);
+ const U=n=>gl.getUniformLocation(prog,n),uT=U('ut'),uM=U('mode'),uA=U('ua'),uH=U('hl'),uL=U('ul'),on=$('texon').checked,lmOn=$('lmon').checked;gl.bindVertexArray(vao);
+ const pass=(zone,soft)=>{nodes.forEach(o=>{if(!visible(o)||!!o.zone!==zone)return;gl.uniform1f(uH,sel.has(o)?1:0);
+  for(const g of o.groups){const nm=g.mat>=0&&o.tc?(mats[g.mat]||'').toLowerCase():'',tx=on&&nm?texGL.get(nm):null,inf=tx&&texInfo.get(nm),isSoft=!!(inf&&inf.soft);
+   if(!zone&&isSoft!==soft)continue;
+   gl.uniform1f(uT,tx?1:0);gl.uniform1f(uM,isSoft?1:0);gl.uniform1f(uA,zone?.4:1);if(tx)gl.bindTexture(gl.TEXTURE_2D,tx);
+   const lmT=on&&lmOn&&g.lm&&o.tc2?texGL.get(g.lm):null;gl.uniform1f(uL,lmT?1:0);if(lmT){gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,lmT);gl.activeTexture(gl.TEXTURE0)}
+   gl.drawArrays(gl.TRIANGLES,o.first+g.start*3,g.count*3)}})};
+ pass(false,false);gl.depthMask(false);pass(false,true);pass(true,false);gl.depthMask(true);
+ if($('entson').checked){gl.disable(gl.DEPTH_TEST);gl.uniform1f(uT,0);gl.uniform1f(uA,1);gl.uniform1f(uL,0);ents.forEach(en=>{if(!en.on)return;gl.uniform1f(uH,en===selEnt?1:0);gl.drawArrays(gl.TRIANGLES,en.first,24)})}
+}
+const keys=new Set();let speedMul=1,last=0;
+function frame(t){const dt=Math.min(.1,(t-(last||t))/1000);last=t;
+ const k=c=>keys.has(c)?1:0,fw=k('KeyW')-k('KeyS'),rt=k('KeyD')-k('KeyA'),up=k('KeyE')-k('KeyQ');
+ if((fw||rt||up)&&(nodes.length||ents.length)){const B=basis(),sp=cam.r*.35*speedMul*(keys.has('ShiftLeft')||keys.has('ShiftRight')?4:1)*dt;
+  for(let i=0;i<3;i++)cam.c[i]+=(-B.z[i]*fw+B.x[i]*rt+(i===1?up:0))*sp}
+ draw();requestAnimationFrame(frame)}
+// ---------- textures
+function mkThumb(px,w,h){const s=document.createElement('canvas');s.width=w;s.height=h;s.getContext('2d').putImageData(new ImageData(px,w,h),0,0);const c=document.createElement('canvas');c.width=c.height=48;c.getContext('2d').drawImage(s,0,0,48,48);return c}
+async function getTex(m,wantGL){
+ const inf=texInfo.get(m);if(inf&&(!wantGL||texGL.has(m)||inf.nogl))return inf;
+ const f=texFiles.get(m);if(!f)return null;
+ try{const r=decodePct(await f.arrayBuffer());
+  const info={w:r.w,h:r.h,fmt:r.fmt,path:f.webkitRelativePath||f.name,soft:false,nogl:!r.px};
+  if(r.px){let mid=0;for(let i=3;i<r.px.length;i+=4){const a=r.px[i];if(a>8&&a<248)mid++}info.soft=mid/(r.w*r.h)>.3;info.thumb=mkThumb(r.px,r.w,r.h);
+   if(wantGL){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,r.w,r.h,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(r.px.buffer));
+    gl.generateMipmap(gl.TEXTURE_2D);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    const W=/^lev_.*_\d+$/i.test(m)?gl.CLAMP_TO_EDGE:gl.REPEAT;gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,W);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,W);texGL.set(m,t)}}
+  texInfo.set(m,info);return info}catch(e){return null}
+}
+function usedMats(){return[...matUse.keys()]}
+function status(extra){
+ const tt=nodes.reduce((s,o)=>s+o.tris,0),u=usedMats(),have=u.filter(m=>texGL.has(m)).length,miss=u.filter(m=>texFiles.size&&!texGL.has(m)&&!texFiles.has(m));
+ $('info').textContent=nodes.length+' узлов, '+tt+' тр., '+ents.length+' сущн., '+nodes.filter(o=>o.zone).length+' зон.'+(texFiles.size?' Текстуры: '+have+'/'+u.length+(miss.length?' (нет файла: '+miss.slice(0,3).join(', ')+(miss.length>3?'…':'')+')':''):' Выберите папку игры, чтобы увидеть текстуры.')+(extra||'');
+}
+async function loadTextures(){
+ const names=[...usedMats(),...lmSet].filter(m=>texFiles.has(m)&&!texGL.has(m));
+ for(let i=0;i<names.length;i++){await getTex(names[i],true);if(i%4===3){status(' Загрузка '+(i+1)+'/'+names.length+'…');await new Promise(r=>setTimeout(r))}}
+ status();renderList();showDet();
+}
+// ---------- lists
+function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+const SORTS={n:[['cat','по категории'],['name','по имени'],['tris','по треугольникам']],e:[['cat','по классу'],['name','по имени']],m:[['use','по использованию'],['name','по имени'],['size','по размеру']]};
+function setTab(t){tab=t;document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+ const s=$('sort');s.textContent='';SORTS[t].forEach(([v,l])=>{const o=el('option',null,l);o.value=v;s.append(o)});renderList()}
+function thumbEl(m,px){const c=el('canvas');c.width=c.height=48;if(px)c.style.width=c.style.height=px+'px';const i=texInfo.get(m);if(i&&i.thumb)c.getContext('2d').drawImage(i.thumb,0,0);return c}
+let rows=new Map();const lmSet=new Set();
+function item(chip,text,right,o){const d=el('div','it');if(o.thumb)d.append(o.thumb);else{const c=el('div','chip');c.style.background=chip;d.append(c)}
+ if(o.cb){const cb=el('input');cb.type='checkbox';cb.checked=o.cb.v;cb.onclick=e=>e.stopPropagation();cb.onchange=()=>o.cb.f(cb.checked);d.prepend(cb)}
+ const s=el('span',null,text);s.title=o.title||text;d.append(s,el('i',null,right||''));d.onclick=e=>o.click(e);d.ondblclick=()=>o.dbl&&o.dbl();return d}
+function renderList(){
+ const L=$('list');L.textContent='';rows=new Map();const q=$('q').value.toLowerCase(),so=$('sort').value;
+ if(tab==='n'){let a=nodes.filter(o=>!q||o.name.toLowerCase().includes(q));
+  a.sort((x,y)=>so==='tris'?y.tris-x.tris:so==='name'?x.name.localeCompare(y.name):(nodeCat(x)[0].localeCompare(nodeCat(y)[0])||x.name.localeCompare(y.name)));
+  let lastC=null;a.forEach(o=>{const c=nodeCat(o);if(so==='cat'&&c[0]!==lastC){lastC=c[0];const h=el('div','gh',c[0]+' · '+a.filter(z=>nodeCat(z)[0]===c[0]).length);h.style.color=c[1];L.append(h)}
+   const r=item(c[1],o.name||'(без имени)',o.tris,{cb:{v:o.on,f:v=>{o.on=v}},click:e=>selectNodes([o],e.shiftKey||e.ctrlKey),dbl:()=>{selectNodes([o]);focusSel()}});if(sel.has(o))r.classList.add('sel');rows.set(o,r);L.append(r)})}
+ else if(tab==='e'){let a=ents.filter(o=>!q||(o.name+' '+o.cls).toLowerCase().includes(q));
+  a.sort((x,y)=>so==='name'?x.name.localeCompare(y.name):((x.cls||'~').localeCompare(y.cls||'~')||x.name.localeCompare(y.name)));
+  let lastK=null;a.forEach(o=>{const c=entCat(o),k=o.cls||'(без класса)';if(so==='cat'&&k!==lastK){lastK=k;const h=el('div','gh',k+' · '+a.filter(z=>(z.cls||'(без класса)')===k).length+' · '+c[0]);h.style.color=c[1];L.append(h)}
+   const r=item(c[1],o.name,so==='cat'?'':(o.cls||''),{title:o.name+' · '+(o.cls||'?'),cb:{v:o.on,f:v=>{o.on=v}},click:()=>selectEnt(o),dbl:()=>{selectEnt(o);focusSel()}});if(o===selEnt)r.classList.add('sel');rows.set(o,r);L.append(r)})}
+ else{let a=usedMats().filter(m=>!q||m.includes(q));
+  const sz=m=>{const i=texInfo.get(m);return i?i.w*i.h:0};
+  a.sort((x,y)=>so==='name'?x.localeCompare(y):so==='size'?sz(y)-sz(x):matUse.get(y).size-matUse.get(x).size);
+  a.forEach(m=>{const i=texInfo.get(m),real=mats.find(z=>z.toLowerCase()===m)||m;
+   const r=item(null,real,matUse.get(m).size+' узл.',{thumb:thumbEl(m,28),title:real+(i?' · '+i.path:texFiles.size?' · файл не найден':''),click:e=>selectNodes([...matUse.get(m)],e.shiftKey),dbl:()=>{selectNodes([...matUse.get(m)]);focusSel()}});L.append(r)})}
+}
+function markSel(){rows.forEach((r,o)=>r.classList.toggle('sel',o===selEnt||sel.has(o)));const f=[...rows.entries()].find(([o])=>o===selEnt||sel.has(o));if(f)f[1].scrollIntoView({block:'nearest'})}
+function selectNodes(l,add){if(!add)sel.clear();selEnt=null;l.forEach(o=>{if(add&&sel.has(o))sel.delete(o);else sel.add(o)});markSel();showDet()}
+function selectEnt(e){sel.clear();selEnt=e;markSel();showDet()}
+function clearSel(){sel.clear();selEnt=null;markSel();showDet()}
+// ---------- details
+function resRow(m,sub){const i=texInfo.get(m.toLowerCase()),r=el('div','res');r.append(thumbEl(m.toLowerCase(),44));const b=el('div');b.append(el('b',null,m));
+ b.append(el('small',null,i?(i.path+' · '+i.w+'×'+i.h+' · '+({0:'ARGB32',2:'RGB24',5:'RGB565',11:'bump',12:'DXT1',13:'DXT1+α',15:'DXT3',17:'DXT5'}[i.fmt]||i.fmt)+(i.soft?' · полупрозрачная':'')):(texFiles.size?'файл не найден':'(выберите папку игры)')));
+ if(sub)b.append(el('small',null,sub));r.append(b);return r}
+async function modelRes(cls,box){const f=mdlFiles.get(cls.toLowerCase());if(!f){box.append(el('div','dm','Модель database/'+cls+'.tpl не найдена'+(mdlFiles.size?'':' (выберите папку игры целиком)')));return}
+ box.append(el('div','dm','Модель: '+(f.webkitRelativePath||f.name)));
+ try{let m=mdlCache.get(cls);if(!m){const r=loadChunks(await f.arrayBuffer()),u=new Set();r.nodes.forEach(n=>n.groups.forEach(g=>{if(g.mat>=0&&g.mat<r.mats.length&&n.tc)u.add(r.mats[g.mat])}));m=[...u];mdlCache.set(cls,m)}
+  for(const t of m){await getTex(t.toLowerCase(),false);if(selEnt&&selEnt.cls===cls)box.append(resRow(t))}}catch(e){box.append(el('div','dm','Не удалось прочитать модель'))}}
+function showDet(){const D=$('det');D.textContent='';
+ if(selEnt){const e=selEnt,c=entCat(e),h=el('div','dh',e.name);const ch=el('div','chip');ch.style.cssText='width:10px;height:10px;border-radius:2px;background:'+c[1];h.prepend(ch);D.append(h);
+  D.append(el('div','dm','Шаблон: '+(e.tpl||'—')+' · Класс: '+(e.klass||'—')+' · '+c[0]+'\nX '+e.pos[0].toFixed(1)+'  Y '+e.pos[1].toFixed(1)+'  Z '+e.pos[2].toFixed(1)));D.lastChild.style.whiteSpace='pre';
+  if(e.props)D.append(el('pre',null,e.props));const box=el('div');D.append(box);if(e.cls)modelRes(e.cls,box);D.style.display='block';return}
+ if(!sel.size){D.style.display='none';return}
+ const l=[...sel],tr=l.reduce((s,o)=>s+o.tris,0);
+ if(l.length===1){const o=l[0],c=nodeCat(o),h=el('div','dh',o.name);const ch=el('div','chip');ch.style.cssText='width:10px;height:10px;border-radius:2px;flex:none;background:'+c[1];h.prepend(ch);D.append(h);
+  const b=o.bb;D.append(el('div','dm',c[0]+' · '+o.tris+' тр. · размер '+[b[3]-b[0],b[4]-b[1],b[5]-b[2]].map(v=>v.toFixed(1)).join(' × ')));
+  const fl=[...o.name.matchAll(/&([a-z0-9]+)/gi)].map(m=>'&'+m[1]);if(fl.length)D.append(el('div','dm','Флаги в имени: '+fl.join(' ')));
+  if(o.zone)D.append(el('div','dm','Невидимая зона: материала нет. Тип определён по имени.'));
+  const seen=new Set();o.groups.forEach(g=>{const ms=[g.mat,...g.layers.filter((x,i)=>i>0)];ms.forEach((mi,i)=>{if(mi<0||mi>=mats.length)return;const m=mats[mi];if(seen.has(m+i))return;seen.add(m+i);D.append(resRow(m,i?'слой '+(i+1)+' (детализация/наложение)':'основная текстура · граней '+g.count))})});
+ }else{D.append(el('div','dh','Выбрано: '+l.length+' узлов'));D.append(el('div','dm',tr+' треугольников'));const u=new Map();l.forEach(o=>o.groups.forEach(g=>{if(g.mat>=0&&g.mat<mats.length)u.set(mats[g.mat],(u.get(mats[g.mat])||0)+1)}));
+  [...u.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12).forEach(([m,n])=>D.append(resRow(m,'в '+n+' группах')))}
+ D.style.display='block'}
+// ---------- opening
+function openBuf(buf,name){
+ let r;try{r=loadChunks(buf)}catch(err){$('info').textContent='Ошибка разбора: '+err;return}
+ if(!r.nodes.length&&!r.ents.length){$('info').textContent='Геометрия не найдена.';return}
+ nodes=r.nodes;mats=r.mats;ents=r.ents;sel.clear();selEnt=null;matUse=new Map();
+ nodes.forEach(o=>{o.on=!/^sky/i.test(o.name)&&!/lod_?\d+$/i.test(o.name);o.bb=bbOf(o.tr);if(o.tc)o.groups.forEach(g=>{if(g.mat>=0&&mats[g.mat]){const m=mats[g.mat].toLowerCase();if(!matUse.has(m))matUse.set(m,new Set());matUse.get(m).add(o)}})});
+ lmSet.clear();nodes.forEach(o=>o.groups.forEach(g=>{g.lm=null;for(const mi of g.layers){const m=mats[mi];if(m&&/^lev_.*_\d+_\d+$/i.test(m)){g.lm=(m+'_0').toLowerCase();lmSet.add(g.lm)}}}));
+ fileName=name.replace(/\.[^.]+$/,'');$('fname').textContent=name;$('drop').style.display='none';$('obj').disabled=false;
+ fit();rebuild();renderList();showDet();status(' Скрыты: небо и копии LOD.');loadTextures();
+}
+function readFile(f){const r=new FileReader();r.onload=()=>openBuf(r.result,f.name);r.readAsArrayBuffer(f)}
+$('open').onclick=()=>$('file').click();$('file').onchange=e=>e.target.files[0]&&readFile(e.target.files[0]);
+$('tex').onclick=()=>$('texdir').click();
+$('texdir').onchange=e=>{for(const f of e.target.files){const n=f.name.toLowerCase();if(n.endsWith('.pct')){const k=n.slice(0,-4),p=(f.webkitRelativePath||'').toLowerCase();if(!texFiles.has(k)||!/\/(lm|sfx|ui)\//.test(p))texFiles.set(k,f)}else if(n.endsWith('.tpl'))mdlFiles.set(n.slice(0,-4),f)}status();loadTextures()};
+$('q').oninput=renderList;$('sort').onchange=renderList;document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
+const mainEl=$('main');
+['dragenter','dragover'].forEach(t=>mainEl.addEventListener(t,e=>{e.preventDefault();mainEl.classList.add('over')}));
+['dragleave','drop'].forEach(t=>mainEl.addEventListener(t,e=>{e.preventDefault();mainEl.classList.remove('over')}));
+mainEl.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f)readFile(f)});
+$('obj').onclick=()=>{
+ let s='# exported from Will Rock viewer\n',b=1;
+ nodes.filter(visible).forEach(o=>{s+='o '+(o.name||'node').replace(/\s/g,'_')+'\n';
+  for(let i=0;i<o.tr.length;i+=3)s+='v '+o.tr[i]+' '+o.tr[i+1]+' '+o.tr[i+2]+'\n';
+  if(o.tc)for(let i=0;i<o.tc.length;i+=2)s+='vt '+o.tc[i]+' '+(1-o.tc[i+1])+'\n';
+  for(let i=0;i<o.tris;i++){const a=b+i*3;s+=o.tc?'f '+a+'/'+a+' '+(a+1)+'/'+(a+1)+' '+(a+2)+'/'+(a+2)+'\n':'f '+a+' '+(a+1)+' '+(a+2)+'\n'}b+=o.tris*3});
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([s],{type:'text/plain'}));a.download=fileName+'.obj';a.click();
+};
+// ---------- mouse / keyboard (Blender-like + fly)
+function ray(px,py){const r=cv.getBoundingClientRect(),sx=(px-r.left)/r.width*2-1,sy=1-(py-r.top)/r.height*2,a=r.width/r.height,t=Math.tan(.4),B=basis();
+ const d=[0,1,2].map(i=>-B.z[i]+B.x[i]*sx*t*a+B.y[i]*sy*t),l=Math.hypot(d[0],d[1],d[2]);return{o:B.e,d:d.map(v=>v/l)}}
+function clickPick(e){const R=ray(e.clientX,e.clientY),n=pickNode(R.o,R.d,nodes.filter(visible)),en=$('entson').checked?rayEnt(R.o,R.d,ents.filter(x=>x.on),en_sz*1.6):null;
+ if(en&&(!n||en.t<n.t*1.02))selectEnt(en.e);else if(n)selectNodes([n.n],e.shiftKey);else if(!e.shiftKey)clearSel()}
+let drag=null;cv.oncontextmenu=e=>e.preventDefault();
+cv.onpointerdown=e=>{mainEl.focus();drag={x:e.clientX,y:e.clientY,x0:e.clientX,y0:e.clientY,b:e.button,alt:e.altKey,sh:e.shiftKey,moved:false};cv.setPointerCapture(e.pointerId);if(e.button===2)keys.add('RMB')};
+cv.onpointerup=e=>{if(drag&&drag.b===0&&!drag.alt&&!drag.moved)clickPick(e);drag=null;keys.delete('RMB')};
+cv.onpointermove=e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.x=e.clientX;drag.y=e.clientY;
+ if(Math.hypot(e.clientX-drag.x0,e.clientY-drag.y0)>4)drag.moved=true;
+ if(drag.b===1||(drag.b===0&&drag.alt)){if(e.shiftKey){const B=basis(),s=cam.dist*.0016;for(let i=0;i<3;i++)cam.c[i]+=-B.x[i]*dx*s+B.y[i]*dy*s}
+  else{cam.yaw-=dx*.006;cam.pitch=Math.max(-1.55,Math.min(1.55,cam.pitch+dy*.006))}}
+ else if(drag.b===2){const B=basis(),eye=B.e;cam.yaw-=dx*.004;cam.pitch=Math.max(-1.55,Math.min(1.55,cam.pitch+dy*.004));const B2=basis();for(let i=0;i<3;i++)cam.c[i]=eye[i]-B2.z[i]*cam.dist}};
+cv.onwheel=e=>{e.preventDefault();if(keys.has('RMB'))speedMul=Math.max(.05,Math.min(40,speedMul*Math.exp(-e.deltaY*.002)));else cam.dist*=Math.exp(e.deltaY*.001)};
+addEventListener('keydown',e=>{const tg=document.activeElement&&document.activeElement.tagName;if(tg==='INPUT'||tg==='SELECT')return;keys.add(e.code);
+ const V={Numpad1:[0,0],Numpad3:[Math.PI/2,0],Numpad7:[0,Math.PI/2-.001]};
+ const cd=e.code.replace(/^Digit(?=[137]$)/,'Numpad');if(V[cd]){const v=V[cd];cam.yaw=v[0]+(e.ctrlKey&&cd!=='Numpad7'?Math.PI:0);cam.pitch=e.ctrlKey&&cd==='Numpad7'?-v[1]:v[1];e.preventDefault()}
+ else if(e.code==='NumpadDecimal'||e.code==='Period')focusSel();else if(e.code==='Home')fit();else if(e.code==='Escape')clearSel();
+ else if(e.code==='KeyH'){if(e.altKey)nodes.forEach(o=>o.on=!/^sky/i.test(o.name)&&!/lod_?\d+$/i.test(o.name));else{sel.forEach(o=>o.on=false);if(selEnt)selEnt.on=false;sel.clear();selEnt=null}renderList();showDet()}
+ if(['Space','ArrowUp','ArrowDown'].includes(e.code)&&tg!=='BUTTON')e.preventDefault()});
+addEventListener('keyup',e=>keys.delete(e.code));addEventListener('blur',()=>keys.clear());
+setTab('n');if(gl){initGL();requestAnimationFrame(frame)}else $('info').textContent='Нужен браузер с WebGL2.';
+</script></body></html>

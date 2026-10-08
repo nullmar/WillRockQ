@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Will Rock — текстуры .pct</title>
+<style>
+:root{--bg:#14161a;--panel:#1b1e24;--line:#2c3039;--tx:#d9d6cc;--dim:#8a8d94;--ac:#d4a24c}
+*{box-sizing:border-box}
+html,body{min-height:100%;margin:0;background:var(--bg);color:var(--tx);font:14px/1.4 system-ui,Segoe UI,sans-serif}
+header{position:sticky;top:0;z-index:2;background:var(--panel);border-bottom:1px solid var(--line);padding:12px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+h1{font-size:15px;margin:0 8px 0 0;font-weight:600}
+button,input[type=search]{font:inherit;color:var(--tx);background:#232730;border:1px solid var(--line);border-radius:4px;padding:6px 10px;cursor:pointer}
+button:hover,button:focus-visible{border-color:var(--ac);outline:none}
+#st{color:var(--dim);font-size:12px;margin-left:auto}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px;padding:16px}
+.c{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px;cursor:pointer}
+.c:hover{border-color:var(--ac)}
+.c canvas{width:100%;height:136px;object-fit:contain;display:block;background:repeating-conic-gradient(#2a2d34 0 25%,#202329 0 50%) 0 0/16px 16px;image-rendering:pixelated}
+.c b{display:block;font-weight:500;font-size:12px;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c small{color:var(--dim);font-size:11px}
+.bad{color:#c9806a}
+#drop{padding:80px 20px;text-align:center;color:var(--dim)}#drop b{display:block;color:var(--tx);font-size:18px;margin-bottom:6px}
+body.over{outline:2px dashed var(--ac);outline-offset:-8px}
+</style></head><body>
+<header><h1>Текстуры .pct</h1>
+<button id="open">Файлы…</button><button id="dir">Папка…</button>
+<button id="flt" title="Показывать только с нераспознанным форматом">Только проблемные</button>
+<span id="st"></span></header>
+<div id="drop"><b>Перетащите .pct файлы или целую папку TEXTURES</b>Клик по миниатюре сохранит PNG</div>
+<div id="grid"></div>
+<input id="f1" type="file" accept=".pct" multiple hidden>
+<input id="f2" type="file" webkitdirectory hidden>
+<script>
+//PCT-START
+const FIX={0xf0:4,0xf1:8,0xf2:4,0xf3:4,0xf9:4,0xfa:4,0xfb:4};
+function parsePct(buf){
+ const dv=new DataView(buf);let o=0,t={};
+ for(let i=0;i<24;i++){
+  const tag=dv.getUint16(o,true);let end=dv.getUint32(o+2,true);
+  if(tag===0xf4){const w=dv.getUint32(t[0xf1],true),h=dv.getUint32(t[0xf1]+4,true);
+   return{w,h,fmt:dv.getUint32(t[0xf2],true),mips:dv.getUint32(t[0xf9],true),base:o+6,dv,len:buf.byteLength}}
+  if(!end)end=o+6+(FIX[tag]||4);
+  t[tag]=o+6;o=end;
+ }
+ throw new Error('нет блока 0xf4');
+}
+function c565(v){return[(v>>11&31)*255/31|0,(v>>5&63)*255/63|0,(v&31)*255/31|0]}
+function dxt(p,dv5,fmt){
+ const{w,h,base,dv}=p,out=new Uint8ClampedArray(w*h*4),mips=p.mips;
+ const tbl=Math.ceil(mips*4/16)*16,start=base+(mips?dv.getUint32(base,true):tbl);
+ const bs=fmt===12?8:16;let o=start;
+ for(let by=0;by<Math.ceil(h/4);by++)for(let bx=0;bx<Math.ceil(w/4);bx++){
+  let al=null;
+  if(fmt===15){al=[];for(let i=0;i<16;i++)al.push((dv.getUint8(o+(i>>1))>>(4*(i&1))&15)*17);o+=8}
+  if(fmt===17){const a0=dv.getUint8(o),a1=dv.getUint8(o+1),A=[a0,a1];
+   if(a0>a1)for(let i=1;i<7;i++)A.push(((7-i)*a0+i*a1)/7|0);else{for(let i=1;i<5;i++)A.push(((5-i)*a0+i*a1)/5|0);A.push(0,255)}
+   let bits=0n;for(let i=0;i<6;i++)bits|=BigInt(dv.getUint8(o+2+i))<<BigInt(8*i);
+   al=[];for(let i=0;i<16;i++)al.push(A[Number(bits>>BigInt(3*i)&7n)]);o+=8}
+  const q0=dv.getUint16(o,true),q1=dv.getUint16(o+2,true),a=c565(q0),b=c565(q1),C=[a,b];
+  if(q0>q1||fmt===17||fmt===15){C.push(a.map((v,i)=>(2*v+b[i])/3|0),a.map((v,i)=>(v+2*b[i])/3|0))}
+  else{C.push(a.map((v,i)=>(v+b[i])/2|0),[0,0,0])}
+  const idx=dv.getUint32(o+4,true);
+  for(let i=0;i<16;i++){const x=bx*4+(i&3),y=by*4+(i>>2);if(x>=w||y>=h)continue;
+   const ci=idx>>2*i&3,c=C[ci],k=(y*w+x)*4;out[k]=c[0];out[k+1]=c[1];out[k+2]=c[2];
+   out[k+3]=al?al[i]:((fmt===12||fmt===13)&&q0<=q1&&ci===3?0:255)}
+  o+=8;
+ }
+ return out;
+}
+function decodePct(buf){
+ const p=parsePct(buf),{w,h,fmt,base,dv}=p;let px;
+ if(fmt===12||fmt===13||fmt===15||fmt===17)px=dxt(p,dv,fmt);
+ else if(fmt===5){px=new Uint8ClampedArray(w*h*4);for(let i=0;i<w*h;i++){const v=dv.getUint16(base+i*2,false);px[i*4]=(v>>11&31)*255/31;px[i*4+1]=(v>>5&63)*255/63;px[i*4+2]=(v&31)*255/31;px[i*4+3]=255}}
+ else if(fmt===11){px=new Uint8ClampedArray(w*h*4);for(let i=0;i<w*h;i++){px[i*4]=dv.getUint8(base+i*2);px[i*4+1]=dv.getUint8(base+i*2+1);px[i*4+2]=128;px[i*4+3]=255}}
+ else if(fmt===2){px=new Uint8ClampedArray(w*h*4);for(let i=0;i<w*h;i++){px[i*4]=dv.getUint8(base+i*3);px[i*4+1]=dv.getUint8(base+i*3+1);px[i*4+2]=dv.getUint8(base+i*3+2);px[i*4+3]=255}}
+ else if(fmt===0){px=new Uint8ClampedArray(w*h*4);for(let i=0;i<w*h;i++){const k=base+i*4;px[i*4]=dv.getUint8(k+1);px[i*4+1]=dv.getUint8(k+2);px[i*4+2]=dv.getUint8(k+3);px[i*4+3]=dv.getUint8(k)}}
+ else return{w,h,fmt,mips:p.mips,px:null};
+ return{w,h,fmt,mips:p.mips,px};
+}
+//PCT-END
+const NAMES={0:'ARGB32',2:'RGB24',5:'RGB565 (BE)',11:'2×8 бит, без знака',12:'DXT1',13:'DXT1+α',15:'DXT3',17:'DXT5'};
+const $=id=>document.getElementById(id),grid=$('grid');let items=[],onlyBad=false;
+function draw(){
+ grid.textContent='';
+ items.filter(it=>!onlyBad||!it.r||!it.r.px).forEach(it=>{
+  const d=document.createElement('div');d.className='c';d.tabIndex=0;
+  const cv=document.createElement('canvas');d.append(cv);
+  const nm=document.createElement('b');nm.textContent=it.name;nm.title=it.name;
+  const sm=document.createElement('small');
+  if(it.err){sm.textContent='ошибка: '+it.err;sm.className='bad'}
+  else{sm.textContent=it.r.w+'×'+it.r.h+' · '+(NAMES[it.r.fmt]||('формат '+it.r.fmt));if(!it.r.px)sm.className='bad'}
+  d.append(nm,sm);grid.append(d);
+  if(it.r&&it.r.px){cv.width=it.r.w;cv.height=it.r.h;cv.getContext('2d').putImageData(new ImageData(it.r.px,it.r.w,it.r.h),0,0);
+   const save=()=>cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=it.name.replace(/\.pct$/i,'')+'.png';a.click()});
+   d.onclick=save;d.onkeydown=e=>{if(e.key==='Enter')save()}}
+ });
+ const bad=items.filter(i=>!i.r||!i.r.px).length;
+ $('st').textContent=items.length+' файлов'+(bad?', не распознано: '+bad:'');
+}
+async function addFiles(fl){
+ const list=[...fl].filter(f=>/\.pct$/i.test(f.name));
+ $('drop').style.display='none';
+ for(let i=0;i<list.length;i++){
+  const f=list[i],it={name:f.name};
+  try{it.r=decodePct(await f.arrayBuffer())}catch(e){it.err=e.message}
+  items.push(it);
+  if(i%20===19||i===list.length-1){draw();await new Promise(r=>setTimeout(r))}
+ }
+}
+$('open').onclick=()=>$('f1').click();$('dir').onclick=()=>$('f2').click();
+$('f1').onchange=e=>addFiles(e.target.files);$('f2').onchange=e=>addFiles(e.target.files);
+$('flt').onclick=()=>{onlyBad=!onlyBad;$('flt').style.borderColor=onlyBad?'var(--ac)':'';draw()};
+['dragenter','dragover'].forEach(t=>document.addEventListener(t,e=>{e.preventDefault();document.body.classList.add('over')}));
+['dragleave','drop'].forEach(t=>document.addEventListener(t,e=>{e.preventDefault();document.body.classList.remove('over')}));
+document.addEventListener('drop',e=>addFiles(e.dataTransfer.files));
+</script></body></html>
